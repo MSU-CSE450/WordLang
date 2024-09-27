@@ -1,18 +1,27 @@
 #include <iostream>
 #include <fstream>
+#include <set>
 #include <vector>
 
 #include "lexer.hpp"
+
+void Error(size_t line_num, std::string message) {
+  std::cerr << "ERROR (line " << line_num << "): " << message << std::endl;
+  exit(1);
+}
 
 struct ASTNode {
   enum Type {
     EMPTY=0,
     STATEMENT_BLOCK,
-    ASSIGN
+    ASSIGN,
+    VARIABLE
   };
   Type type{EMPTY};
   size_t value{0};
   std::vector<ASTNode> children{};
+
+  void SetValue(size_t in) { value = in; }
 };
 
 class SymbolTable {
@@ -22,14 +31,14 @@ private:
     size_t declare_line;
 
     SymbolInfo(size_t declare_line) : declare_line(declare_line) { }
-  }
+  };
   std::vector<SymbolInfo> var_info;
   using scope_t = std::unordered_map<std::string, size_t>;
   std::vector<scope_t> scope_stack{1};
 
 public:
   size_t AddVar(size_t line_num, std::string name) {
-    auto & scope = scope_stack.back()
+    auto & scope = scope_stack.back();
     if (scope.count(name)) {
       Error(line_num, std::string("Redeclaring variable '") + name + "'.");
     }
@@ -49,11 +58,6 @@ private:
   SymbolTable symbols{};
 
   // === HELPER FUNCTIONS ===
-
-  void Error(size_t line_num, std::string message) {
-    std::cerr << "ERROR (line " << line_num << "): " << message << std::endl;
-    exit(1);
-  }
 
   ASTNode MakeVarNode(size_t var_id) {
     ASTNode out(ASTNode::VARIABLE);
@@ -109,7 +113,7 @@ public:
       if (tokens[token_id] == ';') return ASTNode{};
 
       if (tokens[token_id] != '=') {
-        Error(line tokens[token_id].line_id, "Expected ';' or '='.");
+        Error(tokens[token_id].line_id, "Expected ';' or '='.");
       }
       ++token_id;
 
@@ -117,7 +121,7 @@ public:
 
       ASTNode out_node(ASTNode::ASSIGN);
       out_node.children.push_back(MakeVarNode(var_id));
-      out_node.children.push_back(rhs_node;
+      out_node.children.push_back(rhs_node);
 
       return out_node;
     }
