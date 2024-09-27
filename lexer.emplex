@@ -1,0 +1,12 @@
+TYPE List
+LOAD load
+FILTER filter
+FILTER_OUT filter_out
+FOREACH foreach
+PRINT print
+IN in
+ID [a-zA-Z_]\w*
+STRING \"([^"\n]|\\.)*\"
+START_SPACE ^" "+
+-WHITESPACE \s
+-COMMENTS //.*

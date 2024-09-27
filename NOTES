@@ -1,0 +1,10 @@
+List my_words = load("filename");
+List my_words2 = load("filename2");
+
+List combo_words = my_words + my_words2;
+List words1_only = my_words - my_words2;
+List words_with_q = words1_only | filter("q") | filter_out("qu");
+foreach word in words_with_q:
+  print word;
+
+  
