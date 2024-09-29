@@ -23,18 +23,51 @@ void Error(emplex::Token token, Ts... message) {
   Error(token.line_id, message...)
 }
 
-struct ASTNode {
+class ASTNode {
+public:
   enum Type {
     EMPTY=0,
     STATEMENT_BLOCK,
     ASSIGN,
-    VARIABLE
+    VARIABLE,
+    LITERAL,
+    LOAD,
+    PRINT
   };
+private:
   Type type{EMPTY};
   size_t value{0};
+  words_t words{};
   std::vector<ASTNode> children{};
 
+public:
+  ASTNode(Type type=EMPTY) : type(type) { }
+  ASTNode(Type type, size_t value) : type(type), value(value) { }
+  ASTNode(Type type, words_t words) : type(type), words(words) { }
+  ASTNode(Type type, ASTNode child) : type(type) { AddChild(child); }
+  ASTNode(Type type, ASTNode child1, ASTNode child2)
+    : type(type) { AddChild(child1); AddChild(child2); }
+  ASTNode(const ASTNode &) = default;
+  ASTNode(ASTNode &&) = default;
+  ASTNode & operator=(const ASTNode &) = default;
+  ASTNode & operator=(ASTNode &&) = default;
+  ~ASTNode() { }
+
+  Type GetType() const { return type; }
+  size_t GetValue() const { return value; }
+  const words_t & GetWords() const { return words; }
+  const std::vector<ASTNode> & GetChildren() const { return children; }
+  const ASTNode & GetChild(size_t id) const {
+    assert(id < children.size());
+    return children[id];
+  }
+
   void SetValue(size_t in) { value = in; }
+  void SetWords(words_t in) { words = in; }
+  void AddChild(ASTNode child) {
+    assert(child.GetType() != EMPTY);
+    children.push_back(child);
+  }
 };
 
 class SymbolTable {
