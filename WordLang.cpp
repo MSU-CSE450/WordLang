@@ -1,13 +1,26 @@
+#include <assert.h>
 #include <iostream>
 #include <fstream>
 #include <set>
+#include <string>
+#include <unordered_map> 
 #include <vector>
 
 #include "lexer.hpp"
 
-void Error(size_t line_num, std::string message) {
-  std::cerr << "ERROR (line " << line_num << "): " << message << std::endl;
+using words_t = std::set<std::string>;
+
+template <typename... Ts>
+void Error(size_t line_num, Ts... message) {
+  std::cerr << "ERROR (line " << line_num << "): ";
+  (std::cerr << ... << message);
+  std::cerr << std::endl;
   exit(1);
+}
+
+template <typename... Ts>
+void Error(emplex::Token token, Ts... message) {
+  Error(token.line_id, message...)
 }
 
 struct ASTNode {
@@ -27,7 +40,7 @@ struct ASTNode {
 class SymbolTable {
 private:
   struct SymbolInfo {
-    std::set<std::string> words{};
+    words_t words{};
     size_t declare_line;
 
     SymbolInfo(size_t declare_line) : declare_line(declare_line) { }
@@ -40,7 +53,7 @@ public:
   size_t AddVar(size_t line_num, std::string name) {
     auto & scope = scope_stack.back();
     if (scope.count(name)) {
-      Error(line_num, std::string("Redeclaring variable '") + name + "'.");
+      Error(line_num, "Redeclaring variable '", name, "'.");
     }
     size_t var_id = var_info.size();
     var_info.emplace_back(line_num);
@@ -105,7 +118,7 @@ public:
     using namespace emplex;
     case Lexer::ID_TYPE:  // @CAO This should be called LIST.
       if (tokens[token_id] != Lexer::ID_ID) {
-        Error(tokens[token_id].line_id, "Expected identifier in variable declaration.");
+        Error(tokens[token_id], "Expected identifier in variable declaration.");
       }
       var_name = tokens[token_id];
       size_t var_id = symbols.AddVar(tokens[token_id].line_id, var_name);
@@ -113,7 +126,7 @@ public:
       if (tokens[token_id] == ';') return ASTNode{};
 
       if (tokens[token_id] != '=') {
-        Error(tokens[token_id].line_id, "Expected ';' or '='.");
+        Error(tokens[token_id], "Expected ';' or '='.");
       }
       ++token_id;
 
