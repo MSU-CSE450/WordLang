@@ -20,7 +20,7 @@ void Error(size_t line_num, Ts... message) {
 
 template <typename... Ts>
 void Error(emplex::Token token, Ts... message) {
-  Error(token.line_id, message...)
+  Error(token.line_id, message...);
 }
 
 class ASTNode {
@@ -123,7 +123,7 @@ public:
   void Parse() {
     while (token_id < tokens.size()) {
       ASTNode cur_node = ParseStatement();
-      if (cur_node.type != ASTNode::EMPTY) root.children.push_back(cur_node);
+      if (cur_node.GetType() != ASTNode::EMPTY) root.AddChild(cur_node);
     }
   }
 
@@ -166,8 +166,8 @@ public:
       auto rhs_node = ParseExpression();
 
       ASTNode out_node(ASTNode::ASSIGN);
-      out_node.children.push_back(MakeVarNode(var_id));
-      out_node.children.push_back(rhs_node);
+      out_node.AddChild(MakeVarNode(var_id));
+      out_node.AddChild(rhs_node);
 
       return out_node;
     }
