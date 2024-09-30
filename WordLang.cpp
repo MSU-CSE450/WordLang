@@ -3,7 +3,7 @@
 #include <fstream>
 #include <set>
 #include <string>
-#include <unordered_map> 
+#include <unordered_map>
 #include <vector>
 
 #include "lexer.hpp"
