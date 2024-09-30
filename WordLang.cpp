@@ -56,8 +56,8 @@ public:
   Type GetType() const { return type; }
   size_t GetValue() const { return value; }
   const words_t & GetWords() const { return words; }
-  const std::vector<ASTNode> & GetChildren() const { return children; }
-  const ASTNode & GetChild(size_t id) const {
+  std::vector<ASTNode> & GetChildren() { return children; }
+  ASTNode & GetChild(size_t id) {
     assert(id < children.size());
     return children[id];
   }
@@ -189,6 +189,7 @@ public:
     case Lexer::ID_PRINT: return ParsePrint();
     case Lexer::ID_TYPE: return ParseDeclare();
     case Lexer::ID_FOREACH: return ParseForeach();
+    case ';': return ASTNode{};
     default:
       return ParseExpression();
     }
@@ -221,7 +222,7 @@ public:
     auto rhs_node = ParseExpression();
     UseToken(';');
 
-    return ASTNode{ASTNode::ASSIGN, lhs_node, rhs_node}
+    return ASTNode{ASTNode::ASSIGN, lhs_node, rhs_node};
   }
 
   ASTNode ParseForeach() {
@@ -229,7 +230,50 @@ public:
   }
 
   ASTNode ParseExpression() {
+    ASTNode term_node = ParseTerm();
+
+    // @CAO - Need to handle operators.
+
+    return term_node;
+  }
+
+  ASTNode ParseTerm() {
+    auto token = UseToken();
+
+    switch (token) {
+    using namespace emplex;
+    case Lexer::ID_ID:      // Variable
+      return MakeVarNode(token);
+    case Lexer::ID_STRING: { // String literal
+      words_t words;
+      words.insert(token.lexeme.substr(1,token.lexeme.size()-2));  // @CAO Deal with escape chars
+      return ASTNode{ASTNode::LITERAL, words};
+    }
+    case '(': {
+      ASTNode out_node = ParseExpression();
+      UseToken(')');
+      return out_node;
+    }
+    default:
+      Error(token, "Expected expression. Found ", TokenName(token), ".");
+    }
+
     return ASTNode{};
+  }
+
+  void Run(ASTNode & node) {
+    switch (node.GetType()) {
+    case STATEMENT_BLOCK:
+      for (ASTNode & child : node.GetChildren()) {
+        Run(child);
+      }
+      break;
+    case ASSIGN:
+    case VARIABLE:
+    case LITERAL:
+    case LOAD:
+    case PRINT:
+    }
   }
 
 };
