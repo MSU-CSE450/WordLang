@@ -129,6 +129,38 @@ private:
 
   // === HELPER FUNCTIONS ===
 
+  std::string TokenName(int id) const {
+    if (id > 0 && id < 128) {
+      return std::string("'") + static_cast<char>(id) + "'";
+    }
+    return emplex::Lexer::TokenName(id);
+  }
+
+  emplex::Token CurToken() const { return tokens[token_id]; }
+
+  emplex::Token UseToken() { return tokens[token_id++]; }
+
+  emplex::Token UseToken(int required_id, std::string err_message="") {
+    if (CurToken() != required_id) {
+      if (err_message.size()) Error(CurToken(), err_message);
+      else {
+        Error(CurToken(),
+          "Expected token type ", TokenName(required_id),
+          ", but found ", TokenName(CurToken())
+        );
+      }
+    }
+    return UseToken();
+  }
+
+  bool UseTokenIf(int test_id) {
+    if (CurToken() == test_id) {
+      token_id++;
+      return true;
+    }
+    return false;
+  }
+
   ASTNode MakeVarNode(size_t var_id) {
     ASTNode out(ASTNode::VARIABLE);
     out.SetValue(var_id);
