@@ -179,12 +179,12 @@ public:
   void Parse() {
     while (token_id < tokens.size()) {
       ASTNode cur_node = ParseStatement();
-      if (cur_node.GetType() != ASTNode::EMPTY) root.AddChild(cur_node);
+      if (cur_node.GetType()) root.AddChild(cur_node);
     }
   }
 
   ASTNode ParseStatement() {
-    switch (tokens[token_id]) {
+    switch (CurToken()) {
     using namespace emplex;
     case Lexer::ID_PRINT: return ParsePrint();
     case Lexer::ID_TYPE: return ParseDeclare();
@@ -195,40 +195,33 @@ public:
   }
 
   ASTNode ParsePrint() {
-    return ASTNode{};
+    ASTNode print_node(ASTNode::PRINT);
+
+    UseToken(emplex::Lexer::ID_PRINT);
+    UseToken('(');
+    do {
+      print_node.AddChild( ParseExpression() );
+    } while (UseTokenIf(','));
+    UseToken(')');
+    UseToken(';');
+
+    return print_node;
   }
 
   ASTNode ParseDeclare() {
-    auto type_token = tokens[token_id++];
+    auto type_token = UseToken(emplex::Lexer::ID_TYPE);
+    auto var_token = UseToken(emplex::Lexer::ID_ID);
+    symbols.AddVar(var_token, var_token.lexeme);
 
-    std::string var_name{};
+    if (UseTokenIf(';')) return ASTNode{};
 
-    switch (type_token) {
-    using namespace emplex;
-    case Lexer::ID_TYPE:  // @CAO This should be called LIST.
-      if (tokens[token_id] != Lexer::ID_ID) {
-        Error(tokens[token_id], "Expected identifier in variable declaration.");
-      }
-      var_name = tokens[token_id];
-      size_t var_id = symbols.AddVar(tokens[token_id].line_id, var_name);
-      ++token_id;
-      if (tokens[token_id] == ';') return ASTNode{};
+    UseToken('=', "Expected ';' or '='.");
 
-      if (tokens[token_id] != '=') {
-        Error(tokens[token_id], "Expected ';' or '='.");
-      }
-      ++token_id;
+    auto lhs_node = MakeVarNode(var_token);
+    auto rhs_node = ParseExpression();
+    UseToken(';');
 
-      auto rhs_node = ParseExpression();
-
-      ASTNode out_node(ASTNode::ASSIGN);
-      out_node.AddChild(MakeVarNode(var_id));
-      out_node.AddChild(rhs_node);
-
-      return out_node;
-    }
-
-    return ASTNode{};
+    return ASTNode{ASTNode::ASSIGN, lhs_node, rhs_node}
   }
 
   ASTNode ParseForeach() {
