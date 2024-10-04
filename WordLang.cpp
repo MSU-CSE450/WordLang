@@ -247,8 +247,14 @@ public:
 
     switch (token) {
     using namespace emplex;
-    case Lexer::ID_ID:      // Variable
+    case Lexer::ID_ID:       // Variable
       return MakeVarNode(token);
+    case Lexer::ID_LOAD: {   // Load Command
+      UseToken('(');
+      ASTNode arg_node = ParseExpression();
+      UseToken(')');
+      return ASTNode{ASTNode::LOAD, arg_node};
+    }
     case Lexer::ID_STRING: { // String literal
       words_t words;
       words.insert(token.lexeme.substr(1,token.lexeme.size()-2));  // @CAO Deal with escape chars
