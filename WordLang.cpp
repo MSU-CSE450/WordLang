@@ -29,10 +29,13 @@ public:
     EMPTY=0,
     STATEMENT_BLOCK,
     ASSIGN,
+    MATH_OP,
     VARIABLE,
     LITERAL,
     LOAD,
-    PRINT
+    PRINT,
+    FILTER,
+    FILTER_OUT
   };
 private:
   Type type{EMPTY};
@@ -108,7 +111,7 @@ public:
   size_t AddVar(size_t line_num, std::string name) {
     auto & scope = scope_stack.back();
     if (scope.count(name)) {
-      Error(line_num, "Redeclaring variable '", name, "'.");
+      Error(line_num, "Redeclaration of variable '", name, "'.");
     }
     size_t var_id = var_info.size();
     var_info.emplace_back(name, line_num);
@@ -235,11 +238,53 @@ public:
   }
 
   ASTNode ParseExpression() {
-    ASTNode term_node = ParseTerm();
-
+    return ParseExpressionAssign();
+    // ASTNode term_node = ParseTerm();
     // @CAO - Need to handle operators.
+    // return term_node;
+  }
 
-    return term_node;
+  ASTNode ParseExpressionAssign() {
+    ASTNode lhs = ParseExpressionAddSub();
+    if (UseTokenIf('=')) {
+      ASTNode rhs = ParseExpressionAssign();  // Right associative.
+      return ASTNode(ASTNode::ASSIGN, lhs, rhs);
+    }
+    return lhs;
+  }
+
+  ASTNode ParseExpressionAddSub() {
+    ASTNode lhs = ParseExpressionPipe();
+    while (CurToken() == '+' || CurToken() == '-') {
+      int token = UseToken();
+      ASTNode rhs = ParseExpressionPipe();
+      lhs = ASTNode{ASTNode::MATH_OP, lhs, rhs};
+      lhs.SetValue(token);
+    }
+    return lhs;
+  }
+
+  ASTNode ParseExpressionPipe() {
+    ASTNode lhs = ParseTerm();
+    while (UseTokenIf('|')) {
+      auto token = UseToken();
+      UseToken('(');
+      ASTNode filter_ast = ParseExpression();
+      UseToken(')');
+
+      switch (token) {
+      using namespace emplex;
+      case Lexer::ID_FILTER:
+        lhs = ASTNode(ASTNode::FILTER, lhs, filter_ast);
+        break;
+      case Lexer::ID_FILTER_OUT:
+        lhs = ASTNode(ASTNode::FILTER_OUT, lhs, filter_ast);
+        break;
+      default:
+        Error(token, "Unexpected symbol ", TokenName(token));
+      }
+    }
+    return lhs;
   }
 
   ASTNode ParseTerm() {
@@ -273,6 +318,9 @@ public:
   }
 
   words_t Run(ASTNode & node) {
+    words_t out_words;
+    bool filter_out = false;
+
     switch (node.GetType()) {
     case ASTNode::EMPTY:
       assert(false); // We should not have any empty nodes.
@@ -287,6 +335,17 @@ public:
       size_t var_id = node.GetChild(0).GetValue();
       return symbols.VarValue(var_id) = Run(node.GetChild(1));
     }
+    case ASTNode::MATH_OP: {
+      assert(node.GetChildren().size() == 2);
+      words_t left = Run(node.GetChild(0));
+      words_t right = Run(node.GetChild(1));
+      if (node.GetValue() == '+') {
+        for (std::string word : right) left.insert(word);
+      } else if (node.GetValue() == '-') {
+        for (std::string word : right) left.erase(word);
+      }
+      return left;
+    }    
     case ASTNode::VARIABLE:
       assert(node.GetChildren().size() == 0);
       return symbols.VarValue(node.GetValue());
@@ -296,7 +355,6 @@ public:
     case ASTNode::LOAD: {
       assert(node.GetChildren().size() == 1);
       auto filenames = Run(node.GetChild(0));
-      words_t out_words;
       std::string word;
       for (auto name : filenames) {
         std::ifstream file(name);
@@ -304,7 +362,7 @@ public:
           out_words.insert(word);
         }
       }
-      return out_words;
+      break;
     }
     case ASTNode::PRINT:
       for (ASTNode & child : node.GetChildren()) {
@@ -316,9 +374,33 @@ public:
         std::cout << " ]" << std::endl;
       }
       break;
+    case ASTNode::FILTER_OUT:
+      filter_out = true;
+      [[fallthrough]];
+    case ASTNode::FILTER: {
+      assert(node.GetChildren().size() == 2);
+      words_t words = Run(node.GetChild(0));      // Words to be processed (left of the |).
+      words_t filters = Run(node.GetChild(1));    // Filter to apply.
+      // Test each word to see if it passes the filters.
+      for (std::string word : words) {
+        // Loop through each filter, applying it.
+        bool match = false;
+        for (std::string filter : filters) {
+          if (word.find(filter) != std::string::npos) {
+            match = true;
+            break;
+          }
+        }
+        // If we were filtering, keep it if we DID have a match.
+        // If we were filtering OUT, keep it if we DIDN'T have a match.
+        if ((match && !filter_out) || (!match && filter_out)) {
+          out_words.insert(word);
+        }
+      }
+    }
     }
 
-    return words_t{};
+    return out_words;
   }
 
   void Run() { Run(root); }
@@ -336,11 +418,16 @@ public:
     case ASTNode::ASSIGN:
       std::cout << "ASSIGN" << std::endl;
       break;
+    case ASTNode::MATH_OP:
+      std::cout << "MATH_OP" << std::endl;
+      break;
     case ASTNode::VARIABLE:
       std::cout << "VARIABLE" << std::endl;
       break;
     case ASTNode::LITERAL:
-      std::cout << "LITERAL" << std::endl;
+      std::cout << "LITERAL: "
+        << *node.GetWords().begin()
+        << std::endl;
       break;
     case ASTNode::LOAD:
       std::cout << "LOAD" << std::endl;
@@ -348,12 +435,20 @@ public:
     case ASTNode::PRINT:
       std::cout << "PRINT" << std::endl;
       break;
+    case ASTNode::FILTER:
+      std::cout << "FILTER" << std::endl;
+      break;
+    case ASTNode::FILTER_OUT:
+      std::cout << "FILTER_OUT" << std::endl;
+      break;
     }
 
     for (const auto & child : node.GetChildren()) {
-      PrintDebug(child, prefix);
+      PrintDebug(child, prefix+"  ");
     }
   }
+
+  void PrintDebug() const { PrintDebug(root); }
 
 };
 
@@ -365,5 +460,7 @@ int main(int argc, char * argv[]) {
   }
 
   WordLang lang(argv[1]);
-  lang.Run();
+  lang.PrintDebug();
+  std::cout << "-------------------------" << std::endl;
+  lang.Run();  
 }
