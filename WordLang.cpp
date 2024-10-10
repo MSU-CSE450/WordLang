@@ -123,6 +123,15 @@ public:
     assert(id < var_info.size());
     return var_info[id].words;
   }
+
+  void IncScope() {
+    scope_stack.emplace_back();
+  }
+
+  void DecScope() {
+    assert(scope_stack.size() > 1);
+    scope_stack.pop_back();
+  }
 };
 
 class WordLang {
@@ -197,6 +206,9 @@ public:
     case Lexer::ID_PRINT: return ParsePrint();
     case Lexer::ID_TYPE: return ParseDeclare();
     case Lexer::ID_FOREACH: return ParseForeach();
+    // case Lexer::ID_IF: return ParseIf();
+    // case Lexer::ID_WHILE: return ParseWhile();
+    case '{': return ParseStatementBlock();
     case ';': return ASTNode{};
     default:
       return ParseExpression();
@@ -235,6 +247,18 @@ public:
 
   ASTNode ParseForeach() {
     return ASTNode{};
+  }
+
+  ASTNode ParseStatementBlock() {
+    ASTNode out_node{ASTNode::STATEMENT_BLOCK};
+    UseToken('{');
+    symbols.IncScope();
+    while (CurToken() != '}') {
+      out_node.AddChild( ParseStatement() );
+    }
+    symbols.DecScope();
+    UseToken('}');
+    return out_node;
   }
 
   ASTNode ParseExpression() {
